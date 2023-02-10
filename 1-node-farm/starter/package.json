@@ -1,0 +1,19 @@
+{
+  "name": "node-farm",
+  "version": "1.0.0",
+  "description": "node-project",
+  "main": "index.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hobbs9458/complete-node-bootcamp-round-2.git"
+  },
+  "author": "Logan Hobbs",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hobbs9458/complete-node-bootcamp-round-2/issues"
+  },
+  "homepage": "https://github.com/hobbs9458/complete-node-bootcamp-round-2#readme"
+}
