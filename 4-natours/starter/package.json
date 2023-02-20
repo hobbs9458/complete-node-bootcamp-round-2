@@ -1,0 +1,16 @@
+{
+  "name": "natours",
+  "version": "1.0.0",
+  "description": "natours express tutorial",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "author": "Logan Hobbs",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "morgan": "^1.10.0",
+    "nodemon": "^2.0.20"
+  }
+}
