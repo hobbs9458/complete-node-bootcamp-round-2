@@ -15,5 +15,11 @@
   "bugs": {
     "url": "https://github.com/hobbs9458/complete-node-bootcamp-round-2/issues"
   },
-  "homepage": "https://github.com/hobbs9458/complete-node-bootcamp-round-2#readme"
+  "homepage": "https://github.com/hobbs9458/complete-node-bootcamp-round-2#readme",
+  "dependencies": {
+    "slugify": "^1.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.20"
+  }
 }

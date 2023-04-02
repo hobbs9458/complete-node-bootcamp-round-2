@@ -1,2 +1,617 @@
 Round 2 Notes
 
+Section 2
+
+Node: js runtime built on chrome v8 engine. allows us to access file system and do network things with js.
+
+node is a single threaded (which is why we use asynchronous code), event driven, non-blocking I/O model
+
+use cases: api w/ DB, data streaming, real time chat app, server side web app
+
+non-use cases: apps with heavy server side processing (CPU intensive). this would be better for ruby on rails, php, and python.
+
+REPL: read, eval, print, loop
+  CMD: node
+
+docs: https://nodejs.org/en/docs/
+
+localhost means the current computer. a port is a subaddress of a host.
+
+routing: implementing different actions for different URLs
+
+when accessing the file system in node, the '.' that begins the pathname (e.g. ./pathName/morePath) refers to the directory/folder that the node command is run from in the terminal.
+
+top level code is only executed once in the beginning. only the callback in the server is executed on each request. meaning top level code is more likely to be an appropriate use case for synchronous code whereas asynchronous code is more suitable inside the server callback.
+
+2 types of npm packages:
+  -simple or regular: our project / code depend on them to function correctly. e.g. slugify
+  -development dependencies: needed for development only. not required for production. e.g. nodemon
+
+installing dependencies globally seems to mean we can always access them through the command line, without specifying them in the package.json npm 'scripts' for example. 
+
+Section 3 Intro to back end development
+
+Transmission Control Protocol (TCP) / Internet Protocol(IP):
+  -communication protocol (set of standardized rules) that allow computers to communicate on a network such as the internet
+
+  -TCP breaks requests and responses into small chunks called packets before they are sent, then once they arrive the requests and responses are reassembled from the packets. This is more efficient than just sending large chunks of data.
+
+  -IP sends and routes the packets 
+
+server: computer connected to the internet that stores files for the site/app and contains an "HTTP server" that communicates with the browser using requests and responses. This is all a static server consists of, and a good use case would be a basic site that serves static pages. But if we want a dynamic server that connects to databases etc. we need a dynamic server, which includes our app server which communicates with our http server and our files. 
+
+dynamic sites build the pages per request using databases / data manipulation, filling out pre-built templates, etc.  while static sites already have their pages built and are simply served upon request. 
+
+api powered sites are also called 'client side rendered' because the api sends raw data to the browser and the site is then assembled on the browser end (react, angular, etc.). the advantage here is that other sites/apps can consume the data from the api which isn't possible with a traditional dynamic site (it's locked into the one site).
+
+SECTION 4 HOW NODE WORKS
+
+node dependencies: 
+  -chrome v8 engine to convert JS into machine code
+  -libuv: open source library with emphasis on asynchronous I/O, 
+    this layer gives node access to the underlying computer OS, file system, networking, etc. It implements the event loop and the thread pool: writen in C++ (node is also written in C++; and v8 is written in JS and C++)
+      -event loop: handles executing call backs and network I/O
+      -thread pool: handles heavier work like file access or compression
+  -http-parser
+  -c-ares: dns request
+  -openSSL: cryptography
+  -zlib: compression
+
+threads / thread pool:
+  -when we use node it means there is node JS process (instance of a program in execution on a computer) running on it. we have access to the process variable. in the process node JS runs on a single thread (sequence of instructions. you can think of it as a box where our code is executed in the computer's processor)
+
+  -single threaded: our app always runs on one thread which means it's easy to block the app. when a program is started: the top level code is executed, the modules are required, callbacks are registered, and only then does the event loop start running.
+
+  -tasks that are too heavy for the event loop (e.g. fs api, cryptography, compression, dns lookups) get allocated to the thread pool (both the thread pool and event loop are provided by libuv) which has 4 seperate threads and can be configured to 128 threads. this is so they don't block our event loop.
+
+ event loop: what makes node asynchronous and is therefore a very important aspect of it's design:
+  -it handles all the code in callback functions
+  -node is built around callback functions
+  -event driven architecture:
+    -events are emitted
+    -event loop picks them up
+    -callbacks are called
+
+  -does orchestration: recieves events e.g. http requests, expired timers, file finshed reading, etc. and calls their corresponding callback functions. it also involves offloading heavier tasks to the thread pool.
+
+  -4 phases / 4 main callback queues (1 tick of the loop means traversing all 4 phases): each phase has it's own callback queue, and all the callbacks in that queue are called before the event loop moves on to the next phase / queue.
+    -expired timer callbacks
+    -I/O polling and callbacks (event loop waits for things to happen at this phase)
+    -setImmediate callbacks (confusing name, as nextTick is really more immediate)
+    -close callbacks (e.g. when a web server or socket shuts down)  
+
+  -2 other queues: these 2 queues are called after each of the 4 main event loop phases.
+    -process.nextTick() queue (tick is a misleading name because a tick is one full run through of all event loop phases)
+    -other microtasks queue (resolved promises)
+
+  -important to never block the event loop  
+    -don't use sync versions of functions in fs, crypto, and zlib modules in your callback functions
+    -don't perform complex calculations (loops in loops)
+    -be careful with JSON in large objects
+    -don't use overly complex regular expressions
+
+event driven architecture: 
+   |           OBSERVER PATTERN           |
+  -event emitter    -->     event listener    -->    attached callback function
+                 emits event                 calls
+
+streams: used to process (read and write) data piece by piece (chunks), without completing the whole read or write op. therefore it doesn't need to keep all the data in memory.
+  -good for handling large volumes of data. e.g. videos
+  -more efficient data processing in terms of memory and time. we don't have to keep all the data in memory or wait until all the data is available to run the stream.
+  -4 types: all 4 stream types are instances of the eventEmitter class                                                            
+    -readable: we can read (consume) data. --------|--------------------------
+      -e.g. http requests, fs read streams         |
+      -events: data, end                           |                    
+      -functions: pipe(), read()-----------"CONSUME STREAMS"------------------
+    -writable: we write data.                      |
+      -e.g. http responses, fs write streams       |
+      -events: drain, finish                       |                                    
+      -functions: write(), end()-------------------|--------------------------
+    -duplex: we read and write data. 
+      -e.g. net web socket (communication channel between client and server)
+    -transform: duplex streams that can transform the data as they read or write. 
+      -e.g. zlib Gzip creation (compression)       
+  -backpressure: response cannot send data nearly as fast as it's recieving it from the file. we can solve this with pipe(), which pipes the data directly from the readable stream into the writable stream. it automatically handles the speed coming in and out and therefore solves our backpressure issue. syntax: readableSource.pipe(writableDestination);
+
+SECTION 5 ASYNC REVIEW
+
+async functions automatically return promises. 
+
+promises, whether you are building or consuming, do not have to always return a value.
+
+if you need to await multiple promises at once: 
+  await Promise.all([resPromise1, responsePromise2])
+
+SECTION 6 EXPRESS / Natours 
+
+express: minimal node framework providing a higher level of abstraction. features: complex routing, easier request & response handling, middlewear, server-side rendering. allows for rapid development.
+
+app.js conventionally contains express configuration
+
+API: application programming interface: piece of software that can be used by another piece of software to allow apps to communicate
+
+core node modules like fs are often referred to as node API's. we are using the fs API.
+
+web API: database --> json data --> API --> <--communication--> client/clients
+
+API can also mean: node's fs or http API (node APIs), browser DOM JS API, or when exposing methods to public in OOP
+
+REST API (representational state transfer API):
+  -seperate API into logical resources. a resource is an object or representation of something that has data associated with it. usually named in plural e.g. tours, users, reviews
+
+  -expose structured, resource-based URL's 
+
+  -use HTTP methods (CRUD (create, read, update, delete))
+    -GET: read
+    -POST: create 
+    -PUT: update (whole updated object)
+    -PATCH: update (updates part of the object)
+    -DELETE: delete
+    -the URL endpoints should only contain resources but not the actions e.g. '/getTour/tourId' (GET) becomes '/tours/tourId' & '/addNewTour' becomes '/tours' (POST). Notice the endpoints have the same name but the type of request determines which endpoint is targeted. 
+
+  -send data as JSON (usually). we use JSend formatting which envelops the data to mitigate security issues. we add a status message to our object and put the original data into a field called data.
+
+  -be stateless: all state is handled on the client side. each request contains all the necessary info to process it. the server does not have to remember (have state) any previous requests to process the current request.
+
+
+should always specify API version in url to anticipate updates  
+  -'/api/v1/tours' --> 'api/v2/tours'
+  -both versions of api can be in use simultaneously for old and new users respectively
+
+express does not put body data on the request object out of the box. we have to use middleware for that: app.use(express.json()). middleware is a function that can modify the incoming request data. it stands between the request and the response.
+
+req.params: to get parameters of url
+
+routes should be together in the code, and their callback functions (aka route handlers) should be together (exported from route). 
+
+app.route(): allows us to chain our handlers and keeps code DRY:
+  -app.route('/url')
+    .get(getHandler)
+    .post(postHandler) 
+
+request response cycle: 
+  -begins when a request reaches the server and the server creates the request and response objects. this data is used to process and send back a meaningful response. to process the data, we use something called middleware which can manipulate the request and response objects. it's called MIDDLEware because it's a function that is executed between the time it recieves the request and when it sends the response. even our route handlers can be considered middleware that are tied to different routes. 
+
+  -the order of the middleware in the stack is defined by the order they are written in the code.
+
+  -the request and response cycles are sent through the middleware functions (known as the pipeline) in the order the functions are defined in the code. The middleware functions in the pipeline end with next() which allows the request response object to be handed off to the next middleware function. until we reach our route handler which will send the response back to the client.
+  
+  -app.use() is what we use to add middlware. app.use(express.json()) gives us access to the request body. express.json() passes a function to app.use() so this is adding a function to our middleware stack.
+
+  -to define our own middleware function: 
+    -app.use((req, res, next) => {//function logic}) 
+
+  -our middleware functions must defined in the code prior to our route handlers in order to execute
+
+morgan: 3rd party middleware that allows us to see request data in the console. logs data about the request e.g. GET /api/v1/tours 200 3.269 ms - 8565
+
+we can organize our routes and controllers by resource. user routes all go in one file, tour routes in another. user controllers in their own file, tour controllers in another etc. we create a different router for each resource: const myRouter = express.router(). then mount the routers with app.use('/url', myRouter):
+  -Before we segregate them into their own files it looks like:
+    // CREATE ROUTERS FOR EACH RESOURCE
+    const tourRouter = express.Router();
+    const userRouter = express.Router();
+    // TOUR ROUTES
+    tourRouter.route('/').get(getAllTours).post(createTour);
+    tourRouter.route('/:id').get(getTour).patch(updateTour).delete(deleteTour);
+    // USER ROUTES
+    userRouter.route('/').get(getAllUsers).post(createUser);
+    userRouter.route('/:id').get(getUser).patch(updateUser).delete(deleteUser);
+    // MOUNT ROUTERS TO ROUTES
+    app.use('/api/v1/tours', tourRouter);
+    app.use('/api/v1/tours', userRouter);
+
+app.js is typically where we place our middleware, our routers go in the routes folder, and our controllers in a controller folder. this is where our express related code goes. we put our server related code in a server folder. our server file is where we listen, it's where our app begins. 
+
+param middleware: only runs for certains parameters in the url. we get a 4th parameter, value, along with the req, res, and next params that are standard in most non-param middlware.
+
+we can serve static files from our folders rather than from routes using
+ -app.use(express.static('filePath'))
+ -then our client requests to 'root/fileInSpecifiedFilePath' will allow the server to send back the requested file. 
+
+environmental variables: global variables that define the environment the node app runs in. e.g. production mode, dev mode, no DB mode, etc. console.log(process.env) to see EV's. when ready to deploy our app for production, we need to change the NODE_ENV from 'development' to 'production' mode. we specify the mode change with the start CMD: [ NODE_ENV=production nodemon server.js ]. but if we need to modify or add many EV's we do it in the config.env file and use the npm package dotenv:
+  -dotenv.config({ path: './config.env' });
+
+SECTION 7 MONGO DB
+
+mongoDB: document based scalable DB
+  -nosql DB (vs relational)
+  -each DB can contain one or more collections which are the parent structures that contain documents  (collections are referred to as tables in relational DBs).
+  -each collection can contain one or more structures called documents (referred to as rows in relational). each document contains data for a single entity e.g. post, user, review, etc. 
+  -data format is BSON which is similar to JSON. BSON uses field value pairs that are typed, meaning all values have a data type like string, boolean, etc. max doc size is 16mb and each doc contains an auto generated data unique id that acts as the key to that doc (relational DBs use columns rather than fields)
+  -e.g.
+  collections       documents
+   blog ------------> post
+   users -----------> user
+   reviews ---------> review
+  -no document schema is required, so each doc can have different number and type of fields
+  -performant due to embedded data models, indexing, sharding, flexible documents, and native duplication
+  -embedded/denormalizing: can include related data into a single doc. this allows for quicker access and easer data models. (relational DBs are normalized. if you needed to embed data for comments column, you would need to link it to an entirely new table and join it to the main table.)
+
+mongosh (mongo shell) CMD's:
+  -CMD: mongosh
+    -opens mongo shell 
+  -CMD: use my-db-name 
+    -mongosh will switch to that db. if my-db-name doesn't exist it will be created. 
+  -CMD: db.nameOfCollection.insertOne({ name: "name of document", anotherProperty: "another value" })
+    -db refers to the active db. if we switched to my-db-name, it will be active. we have to create and name our collection (nameOfCollection in this case) before we can add docs to it. use insertMany([]) if you need to create more than one doc. pass doc in as JS object and it will be converted to BSON. 
+    -e.g db.tours.insertMany({ name: "The Forest Hiker", price: "297", rating: "4.7" })
+    -an ID will be automatically assigned to the collection when it's created
+  -CMD: db.nameOfCollection.find()
+    -returns the docs of the specified collection
+    -can also accept a filter object which returns the document that passes the filter: 
+      -CMD: db.nameOfCollection.find({ name: "The Forest Hiker" })
+      -can set a condition on the filter that returns all the objects that meet that condition: 
+        -CMD: db.tours.find({ price: {$lte: 500} })
+          -this will return all docs that a price less than or equal to ($lte) 500
+      -can search AND query using multiple criteria: 
+        -CMD: db.tours.find({ price: {$lt: 500}, rating: {$gte: 4.8} })
+          -returns all docs with a price less than 500 AND a rating greater than or equal to ($gte) 4.8
+      -can search with OR query using multiple criteria 
+        -CMD: db.tours.find({ $or: [ {price: {$lt: 500}}, {rating: {$gte: 4.8}} ] })
+          -returns all docs that have a price $lt than 500 OR a rating $gte 4.8 
+      -can pass in selection object along side filter: 
+        CMD: db.tours.find({ $or: [ {price: {$lt: 500}}, {rating: {$gte: 4.8}} ] }, { name: 1 })
+          -returns only the selected properties that are set to 1. in this case we return only the name property/values that pass the filter.
+  -CMD: db.collectionName.updateOne({ name: "The Name Value" }, { $set: {price: 597} })
+    -only the first one that matches the filter object will be updated. use updateMany() to update all documents that pass the filter. 
+    -can have multiple conditionals on filter. Can also create new properties using $set.
+      -CMD: db.collectionName.updateMany({ prop1: {$gt: 500}, prop2: {$gte: 4.8} }, { $set: {newPropertyName: "New Property Value"} })
+        -newPropertyName did not exist but now it will on all the objects that pass the filter's conditions.
+  -CMD: db.collectionName.replaceOne() & db.collectionName.replaceMany()
+    -rather than updating part of the document like update, replace will completely replace the old doc with the new
+  -CMD: db.collectionName.deleteOne({filter}) & ....deleteMany({filter})
+    -delete one or many docs in a collection
+    -passing in an empty object to deleteMany() will delete all docs in a collection
+  -CMD: show dbs 
+    -shows all dbs
+  -CMD: show collections 
+    -shows collections of active db
+  -CMD: quit()
+    -quits mongosh shell
+
+-compass is a GUI for querying
+
+-cluster is an instance of a db 
+  
+SECTION 8 MONGOOSE
+
+mongoose: an Object Data Modeling (ODM) library for MongoDB and Node.js, providing a higher level of abstraction. the ODM library is just a way for us to interact with a DB using JS.
+  -features: 
+    -schemas to model data and relationships
+      -schema: where we model our data by describing the structure of the data, default values, and validation
+      -model: a wrapper for the schema, providing an interface to the DB for CRUD ops
+    -validation 
+    -query API
+    -middleware
+
+backend architecture:
+  -model, view, controller (MVC) architecture 
+    -model: application data and business logic 
+    -controller: application logic: handle app request, interact with models, and send back responses to the client
+    -view: needed if your app has a GUI, presentation logic: templates used to generate the view
+
+    -sequence: 
+      -req --> router --> controller --> model --> response or inject data into template and send page as response
+
+    -seperate business logic from application logic 
+      -app logic: all code concerned with implementation rather than the business problem. manages requests and responses. concerned with the technical aspects of the app. bridge between model and view layer.
+      -business logic: code that solves the business problem. directly related to business rules, how the business works, and business needs.  
+    -fat models / thin controllers: offload as much logic as possible into the models, and keep the controllers as simple and lean as possible. 
+
+you can call methods directly on the model: 
+  -modelName.create(req.body) to create a new doc. this returns a promise with the doc.
+  -modelName.find() to return all the docs in that collection 
+  -modelName.findById(req.params.id) or modelName.findOne({ _id: req.params.id }) to find the doc with that ID
+  -modelName.findByIdAndUpdate(req.params.id, req.body, {
+    // options
+    new: true // makes sure to return the new updated/patched doc; must set because defaults to false.
+    runValidators: true // update validators validate the update operation against the model's schema 
+  }); to patch a doc
+  -modelName.countDocuments();
+    -returns number of available docs
+
+in mongoose docs when you see Model.prototype.method() the prototype refers to an instance created from that model, but not on the model itself (which would be Model.method() in docs). eg. const newTour = new Tour({}) newTour.save() .save() is on the model prototype
+
+process.exit() is an aggressive way to exit a program. best for small scripts rather than full apps.
+
+mongoose filter techniques: if we await these directly they will simply return the doc, otherwise they will return a query which we can chain methods like sort, limit, etc. we shouldn't await these directly if we want to chain methods like sort, limit, fields, etc. instead we should store the result in a query and await that query after chaining. 
+  -Tour.find({
+    duration: 5,
+    difficulty: 'easy'
+  }); returns all the documents that match those specs
+  -Tour.find(req.query); using query string object to filter. we actually probably wouldn't pass req.query directly like this, but rather we would create a hard copy using destructuring and pass it to find. ???best I can tell, this allows us to filter out sort, limit, etc. on our copy without removing them from the original query. That way we can check to see if those methods exist on our query and implement them???
+  -Tour.find()
+    .where('duration')
+    .equals(5)
+    .where('difficulty')
+    .equals('easy');
+
+advanced filtering
+  -to pass more granular query string we use brackets:
+    - baseURL/path?firstQuery=firstValue&secondQuery[gte]=secondValue 
+                                                    -----
+      -will create {
+        firstQuery: firstValue,
+        secondQuery: { gte: secondValue }
+      }
+      -notice how our object is close to MongoDB syntax but not entirely: we have gte rather than $gte. this can be fixed with regex: 
+        - let queryStr = JSON.stringify(queryObj);
+
+          // the pipe indicates or and wrapping with \b indicates only exact matches
+
+          queryStr = queryStr.replace(/\b(lte|lt|gte|gt)\b/g, (match) => `$${match}`);
+
+          const tours = await Tour.find(JSON.parse(queryStr));
+
+  -query.sort(-queryToSortBy)
+    -we can pass in multiple sorting queries. they are sepearted by comma in the query but mongoose needs seperation by space.
+      -const sortBy = req.query.sort.split(',').join(' ');
+      -having - in front of arg will reverse the sorting order
+  -query.select(fieldToSelect -fieldToExclude)
+    -returns only the specified fields.
+    -we can specifically exlude fields by placing a - in front of the arg string 
+    -a different way to exlude is via the model by setting our select property to false for whatever fields should not be shown by default
+  -pagination: we use query.skip() and query.limit() to allow the user to select a specific page of our results
+    -const page = req.query.page * 1 || 1;
+     const limit = req.query.limit * 1 || 100;
+     // if we have a limit of 10, we want 10 results per page. so if we want to start on page 3, we would be starting on the 21st result, meaning we need to skip 20 results. the formula (page - 1) * limit gives us how many results to skip;
+     const skip = (page - 1) * limit;
+     query = query.skip(skip).limit(limit);
+  
+
+mongoDB aggregation pipeline: framework for data aggregation: we define a pipeline that all docs from a collection go through, they are processed step by step to transform them into aggregated results. e.g. calculating averages, min and max values, distances, etc.
+ -....const stats = await Tour.aggregate([
+      {
+        $match: {
+          ratingsAverage: { $gte: 4.5 },
+        },
+      },
+      {
+        $group: {
+          _id: { $toUpper: '$difficulty' },
+          // 1 to count each tour as 1
+          numTours: { $sum: 1 },
+          numRatings: { $sum: '$ratingsQuantity' },
+          avgRating: { $avg: '$ratingsAverage' },
+          avgPrice: { $avg: '$price' },
+          minPrice: { $min: '$price' },
+          maxPrice: { $max: '$price' },
+        },
+      },
+      {
+        // 1 for ascending
+        $sort: { avgPrice: 1 },
+      },
+    ]);
+    res.status(200).json({
+      // using JSEND formatting to envelop our data
+      status: 'success',
+      data: {
+        stats,
+      },
+    });....
+
+$unwind: deconstructs an array field from the input docs, and output 1 doc for each element of the array
+
+$match: selects docs (basic query)
+
+$limit: show only x number results
+
+$project: if set to 0 it will not return the data:
+  -{
+      // will prevent _id from being returned in results
+      $project: { _id: 0 },
+    }
+
+virtual properties: fields that we define on our schema but they are not persisted in the DB. cannot specifically query for them because the properties are not in the DB:
+  - tourSchema.virtual('durationWeeks').get(function () {
+      return this.duration / 7;
+    });
+  - must pass in options as second schema arg: 
+    - {
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
+      }
+
+mongoose middleware: can run function when between when the saving (or some other event) is issued and the actual saving of the doc, or after the saving. these are referred to in mongoose as pre and post hooks.
+
+4 types of mongoose middleware: document, query, aggregate, & model
+  -document: can act on currently processed doc
+    - // 'save' middleware only runs on .save() & .create()
+      tourSchema.pre('save', function (next) {
+        this.slug = slugify(this.name, { lower: true });
+        next();
+      });
+
+    - // 'post' hooks gets access to the doc param and next is the second param
+       tourSchema.post('save', function (doc, next) {
+        console.log(doc);
+        next();
+       });
+
+  -query: allows us to run functions before and/or after a query is executed
+    - // regex selects all queries that begin with find...
+      tourSchema.pre(/^find/, function (next) {
+        // we can chain a .find() method onto our query before it runs
+        this.find({ secretTour: { $ne: true } });
+        next();
+      });
+
+    - tourSchema.post(/^find/, function (docs, next) {
+        console.log(docs);
+        next();
+      });
+  -aggregate: add hooks before or after an aggregation event
+    - tourSchema.pre('aggregate', function (next) {
+        const pipeline = this.pipeline();
+        pipeline.unshift({ $match: { secretTour: { $ne: true } } });
+        next();
+      });
+
+  -model: jonas does not cover in this section
+
+
+validation: checking that the entered values are in the right format for each field in the doc schema, and verifying that all required fields have input
+  |
+  vs.
+  |
+sanitization: ensure inputted data is clean e.g. no malicious code injected into DB or code, we remove unwanted chars or code from input data. we never except data input as is, we always sanitize.
+
+custom validators are just functions that return true or false. the input is only accepted if the function returns true.
+  - priceDiscount: {
+      type: Number,
+      validate: {
+        // will only have access to 'this' when creating new tour here, not on update
+        validator: function (val) {
+          return this.price > val;
+        },
+        // {VALUE} is mongoose syntax to get access to the validator function's arg
+        message: 'price discount ({VALUE}) must be less than original price',
+      },
+    },
+
+SECTION 9 Error Handling With Express 
+
+use node debugger (npm package: ndb) to debug backend apps
+
+operational errors: problems that we can predict will happen at some point, so we handle them in advance. they are not bugs e.g invalid path, invalid user input, failed to connect to server or DB, request timeout etc.
+|
+vs
+|
+programming errors: bugs. difficult to find and handle. e.g. reading properties on undefined, passing a number where an object is expected, etc.
+
+we use a global error handling middleware to handle all our operational errors. handling means sending a response to the user to let them know what happened. it may involve trying an op again, or crashing the server, etc.
+
+if we give our middleware 4 parameters, express will recognize it to be error handling middleware.
+
+if next() recieves an arg, express will know it's an error. it will skip all subsequent middleware and go to our global error handling middleware.
+
+when you have an unhandled promise rejection, process will emit an event called 'unhandledRejection'. we can use this to handle these globally: 
+-   // global unhandled promise rejection handler. e.g. a failed DB connection
+    process.on('unhandledRejection', (err) => {
+      console.log(err.name, err.message);
+      console.log('unhandled rejection. shutting down.');
+      // server.close() gives the app time to handle any pending requests before shutting down.
+      server.close(() => {
+        // args for process.exit(): 0 means success while 1 stands for uncaught exception
+        process.exit(1);
+        // in real world app we would need to restart the server after crashing it. some node hosting platforms do this automatically.
+      });
+    });
+
+uncaught exceptions are handled similarly to unhandled rejections: 
+  - // global uncaught exception handler. needs to go at top of code. if you had an error that occured above this line it would not be caught.
+    process.on('uncaughtException', (err) => {
+      console.log(err.name, err.message);
+      console.log('unhandled exception. shutting down.');
+
+      process.exit(1);
+    });
+
+SECTION 10 AUTHENTICATION, AUTHORIZATION, & SECURITY 
+
+the user controller does not fully follow REST architecture as it uses a verb for it's url e.g. '/signup'
+
+pws should not be plainly stored in DB, need to use good pw mgmt with salting and hashing (encryption):
+  - userSchema.pre('save', async function (next) {
+      // no need to run this middleware if the pw wasn't modified
+      if (!this.isModified('password')) return next();
+
+      // salt & hash pw at cost of 12
+      this.password = await bcrypt.hash(this.password, 12);
+
+      // no longer need confirmation
+      this.passwordConfirm = undefined;
+    });
+
+custom validator functions only run on .save() & .create(). so when we update a user, we need to use .save() so we can compare our original password entry to our confirmPassword entry. otherwise, we could authenticate a user without validating/confirming the pw:
+  - // only works on .save() & .create(). use .save() to update/patch a user so you can confirm the pw.
+    validate: {
+      validator: function (pwConfirm) {
+        return pwConfirm === this.password;
+      },
+      message: 'Passwords must match.',
+    },
+
+jason web tokens (JWT) provide a stateless solution for authentication (no session state is stored on the server. a secret string is stored on the server that is used to create the unique JWT signature). the unencrypted header (metadata about token), the unencrypted payload (data we can encode into the token), and the secret string are all combined to create a signature. to authorize a user, we compare their JWT's original signature to a test signature created from the JWT's header + payload and the secret string. if the header or payload changes, or the secret string is unknown, the signature will be different and the user will not be authorized. this entire process needs to happen on https (so it's secure and encrypted).
+
+an instance method is a method that is available on all documents of a certain collection. 'this' points to the doc & fields with ....select: false.... will not be available on ....this.fieldWithSelectFalse.... that is why we have to pass in our pw when using bcrypt's compare function which returns true if the passwords match: 
+  - // instance method: available on all docs in collection. we have to pass the candidate pw into the function because this.password is not available due to it's select field being set to false in the schema
+    userSchema.methods.correctPassword = async function (candidatePw, userPw) {
+      return await bcrypt.compare(candidatePw, userPw);
+    };
+
+the standard for sending token with header: 
+  -header should be set to 'Authorization' and value should start with 'Bearer' as we bear or possess the token
+
+node's util module has a promisify function
+
+we can use node's crypto module to hash/create a token (not a jwt) to the user for password resets. we send the token to the users email and store a hashed version of it in the DB. when the user sends his new password, we verify the tokens match before updating the password.
+
+npm package nodemailer is used for sending emails with node
+
+mailtrap is a tool we can use for 'safe email testing for staging and development'. it acts like it's sending emails to read addresses, but they don't actually send to the reciever. we can see what they would look like from the reciever's end before we implement sending actual emails.
+
+updating pws are usually handled in a different controller than updating other user data like email etc.
+
+a good use case for findByIdAndUpdate() is for updating non-sensitive data as it bypasses the required fields needed for .save() and .create() 
+
+when users delete their accoutn, we don't actually delete them, but rather set their active field to false. then we use query middleware to filter out the userd in query results who's active class is not equal to true. 
+
+security practices summary chart on vid 141 ~ 5:15
+
+a cookie is a piece of text sent to the client from the server. the client recieves the cookie and automatically stores it and sends it back along with all requests to the same server.
+
+rate limiting prevents the same IP from making too many requests to our API. helps prevent 'denial of service' or 'brute force attacks'. Adapt your max limit to the needs of your app depending on how many requests are typically required.
+
+SECTION 11 MODELING DATA AND ADVANCED MONGOOSE
+
+types of relationships between data
+  -1:1- movie --> name
+  -1:many (more than 1)
+    -1:few- movie --> few awards
+    -1:many- movie --> hundreds or thousands of reviews 
+    -1:ton- app --> millions of logs 
+  -many:many- movies <--> actors (movies have many actors and actors can play in many movies)
+
+referencing vs embedding
+  -referenced / normalized: the two related data sets and all their docs are seperated e.g. the movie doc contains references to the actor docs (referencing a child).
+    -pro: better performance when we only need to query 1 type of data (movie or actor) on its own
+    -con: need 2 queries if you need data from referenced docs (movies and actors)
+
+  -embedded / denormalized: the related data is stored in the same doc e.g. the actor data is embedded in the movie docs. 
+    -pro: better performance if you need all info at once (actor and movie data) 
+    -con: impossible to query the embedded document on it's own (actors)
+
+  -3 criteria for determining normalized or denormalized (see slide)
+    1. relationship type: how two datasets are related 
+    2. data access patterns: how often data is read and written. read/write ratio. 
+    3. data closeness: how much the data is related (e.g. high closeness would be username and email)
+
+  -Types of referencing
+    -child referencing- 1:few 
+    -parent referencing- 1:many, 1:ton 
+    -two-way referencing- many:many
+
+  -summary
+    -structure your data to match the ways your app queries and updates data. identify questions that arise from your apps use cases then model your data to answer those questions. 
+    -favor embedding unless theres a good reason not to especially on 1:few and 1:many relationships and when data is mostly read but rarely updated or when two datasets belong together intrinsically. 
+    -1:ton or many:many is usally a good reason to reference 
+    -favor referencing when data is updated a lot and you need to frequently access a dataset on its own.
+    -don't allow arrays to grow indefinitely. if you need to normalize, use child referencing for 1:many and parent referencing for 1:ton
+    -use two way referencing for many:many. this allows us to search for the different data independently.
+
+factory function: function that returns another function
+
+index fields make querying more efficient. mongo has id indexes automatically and also creates them for fields that are set to unique in our model. we can also explicitly set our own indexes on fields. it's a good idea to set indexes for fields that are queried(read) the most. 
+
+BM: 
+Review: 
+To do: 
+Notes: created getOne function but need to replace the old function in the controller
+
+users:
+"email": "normaluser@gmail.com",
+"password": "pass1234",
+"email": "sunny@gmail.com",
+"password": "SunnyIsSoSoGreat",

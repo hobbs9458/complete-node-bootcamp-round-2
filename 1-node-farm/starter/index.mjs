@@ -1,8 +1,9 @@
 import fs from 'fs';
 import http from 'http';
 import url from 'url';
-import fileDirName from './utils/file-dir-name.mjs';
+import slugify from 'slugify';
 import fillTemplate from './modules/fillTemplate.js';
+import fileDirName from './utils/file-dir-name.mjs';
 const { __dirname } = fileDirName(import.meta);
 
 const overviewTemplate = fs.readFileSync(
@@ -25,7 +26,6 @@ const dataObj = JSON.parse(data);
 
 const server = http.createServer((req, res) => {
   const { query, pathname } = url.parse(req.url, true);
-  console.log(query.id);
 
   if (pathname === '/' || pathname === '/overview') {
     res.writeHead(200, {
