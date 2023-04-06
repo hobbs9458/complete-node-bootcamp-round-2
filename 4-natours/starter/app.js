@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
@@ -12,10 +13,21 @@ const globalErrorHandler = require('./controllers/errorController');
 const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
 const reviewRouter = require('./routes/reviewRoutes');
+const viewRouter = require('./routes/viewRoutes');
 
 const app = express();
 
+// setting view engine to pug
+app.set('view engine', 'pug');
+// set where views are located in file system
+app.set('views', path.join(__dirname, 'views'));
+
 // GLOBAL MIDDLEWARE
+
+// serve static files
+// all static assets will be served from our public folder. this is how pug knows to make http requests for style and img assets in the public folder without specifying it in the pug file
+app.use(express.static(path.join(__dirname, 'public')));
+
 // set security http headers
 app.use(helmet());
 
@@ -54,10 +66,8 @@ app.use(
   ])
 );
 
-// serve static files
-app.use(express.static(`${__dirname}/public`));
-
 // MOUNT ROUTERS
+app.use('/', viewRouter);
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/reviews', reviewRouter);

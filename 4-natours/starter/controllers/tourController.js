@@ -93,11 +93,76 @@ exports.getMonthlyPlan = catchAsyncError(async (req, res) => {
       $sort: { numTourStarts: -1 },
     },
   ]);
+
   res.status(200).json({
     // using JSEND formatting to envelop our data
     status: 'success',
     data: {
       plan,
+    },
+  });
+});
+
+// '/tours-within/:distance/center/:latlng/unit/:unit'
+exports.getToursWithin = catchAsyncError(async (req, res, next) => {
+  const { distance, latlng, unit } = req.params;
+  const [lat, lng] = latlng.split(',');
+  // mongoDB expects the radius of our sphere to be specified in radians. radians is found by dividing our distance by the radius of the earth. so must take into account whether our distance is in miles or kilometers
+  const radius = unit === 'mi' ? distance / 3963.2 : distance / 6378.1;
+
+  if (!lat || !lng) {
+    next(new AppError('Please enter lat and long in correct format: lat,lng'));
+  }
+
+  const tours = await Tour.find({
+    startLocation: {
+      $geoWithin: { $centerSphere: [[lng, lat], radius] },
+    },
+  });
+
+  res.status(200).json({
+    status: 'success',
+    results: tours.length,
+    data: {
+      data: tours,
+    },
+  });
+});
+
+exports.getDistances = catchAsyncError(async (req, res, next) => {
+  const { latlng, unit } = req.params;
+  const [lat, lng] = latlng.split(',');
+
+  const multiplier = unit === 'mi' ? 0.000621371 : 0.001;
+
+  if (!lat || !lng) {
+    next(new AppError('Please enter lat and long in correct format: lat,lng'));
+  }
+
+  const distances = await Tour.aggregate([
+    {
+      $geoNear: {
+        near: {
+          type: 'Point',
+          coordinates: [lng * 1, lat * 1],
+        },
+        distanceField: 'distance',
+        distanceMultiplier: multiplier,
+      },
+    },
+    {
+      // project specifies what data we want to get back from our request
+      $project: {
+        distance: 1,
+        name: 1,
+      },
+    },
+  ]);
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      data: distances,
     },
   });
 });

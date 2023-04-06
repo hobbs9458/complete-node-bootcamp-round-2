@@ -23,6 +23,12 @@ router
   );
 
 router
+  .route('/tours-within/:distance/center/:latlng/unit/:unit')
+  .get(tourController.getToursWithin);
+
+router.route('/distances/:latlng/unit/:unit').get(tourController.getDistances);
+
+router
   .route('/')
   // we protect routes by throwing an error in authController.protect if user is not verified. throwing the error prevents tourController.getAllTours from being called
   .get(tourController.getAllTours)

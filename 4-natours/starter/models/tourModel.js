@@ -35,6 +35,10 @@ const tourSchema = new mongoose.Schema(
       default: 4.5,
       min: [1, 'Minimum rating is 1'],
       max: [5, 'Maximum rating is 5'],
+      // Math.round rounds to nearest whole number, so we for rating 4.667,
+      // we pass in 4.667 * 10 = 46.67 so it round it to 47, then we divide 46.67 by 10 to
+      // get 4.7
+      set: (val) => Math.round(val * 10) / 10,
     },
     ratingsQuantity: {
       type: Number,
@@ -119,6 +123,7 @@ const tourSchema = new mongoose.Schema(
 
 tourSchema.index({ price: 1, ratingsAverage: -1 });
 tourSchema.index({ slug: 1 });
+tourSchema.index({ startLocation: '2dsphere' });
 
 tourSchema.virtual('durationWeeks').get(function () {
   return this.duration / 7;
@@ -170,12 +175,12 @@ tourSchema.pre(/^find/, function (next) {
 //   next();
 // });
 
-// aggregation middleware
-tourSchema.pre('aggregate', function (next) {
-  const pipeline = this.pipeline();
-  pipeline.unshift({ $match: { secretTour: { $ne: true } } });
-  next();
-});
+// aggregation middleware; commented out, it was interfering with $geoNear aggregation as it needs to be the first in the pipeline
+// tourSchema.pre('aggregate', function (next) {
+//   const pipeline = this.pipeline();
+//   pipeline.unshift({ $match: { secretTour: { $ne: true } } });
+//   next();
+// });
 
 const Tour = mongoose.model('Tour', tourSchema);
 
