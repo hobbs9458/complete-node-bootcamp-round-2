@@ -605,7 +605,7 @@ factory function: function that returns another function
 
 index fields make querying more efficient. mongo has id indexes automatically and also creates them for fields that are set to unique in our model. we can also explicitly set our own indexes on fields. it's a good idea to set indexes for fields that are queried(read) the most. 
 
-BM: 
+BM: 191@~8:30
 Review: 
 To do: 
 Notes: created getOne function but need to replace the old function in the controller

@@ -82,6 +82,18 @@ exports.login = catchAsyncError(async (req, res, next) => {
   createSendToken(user, 200, res);
 });
 
+exports.logout = (req, res) => {
+  console.log('backend log out function');
+  res.cookie('jwt', 'loggedout', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+  });
+
+  res.status(200).json({
+    status: 'success',
+  });
+};
+
 exports.protect = catchAsyncError(async (req, res, next) => {
   // check if token exists
   let token;
@@ -90,6 +102,8 @@ exports.protect = catchAsyncError(async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer')
   ) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies.jwt) {
+    token = req.cookies.jwt;
   }
 
   if (!token) {
@@ -107,7 +121,10 @@ exports.protect = catchAsyncError(async (req, res, next) => {
   // check if the user still exists. if they were deleted from the DB after the token was issued, they should not gain access
   const currentUser = await User.findById(decodedPayload.id);
   if (!currentUser) {
-    next(new AppError('The user with this token is no longer in the DB'), 401);
+    return next(
+      new AppError('The user with this token is no longer in the DB'),
+      401
+    );
   }
 
   // make sure pw wasn't changed. if a token was stolen, a user may change the pw to prevent others from accessing the route. if we don't verify the pw is correct, the user who stole the token could gain access.
@@ -126,6 +143,40 @@ exports.protect = catchAsyncError(async (req, res, next) => {
   // grant access to protected route
   next();
 });
+
+// similar to protect function but only for rendered pages, so there will be no errors. ???he doesn't explain why???
+exports.isLoggedIn = async (req, res, next) => {
+  if (req.cookies.jwt) {
+    try {
+      // verify the token.
+      const decodedPayload = await promisify(jwt.verify)(
+        req.cookies.jwt,
+        process.env.JWT_SECRET
+      );
+
+      // check if the user still exists
+      const currentUser = await User.findById(decodedPayload.id);
+
+      if (!currentUser) {
+        return next();
+      }
+
+      // make sure pw wasn't changed after token was issued.
+      if (currentUser.changedPasswordAfter(decodedPayload.iat)) {
+        return next();
+      }
+
+      // if it makes it here, there is a logged in user
+
+      // every pug template has access to res.locals so we can pass data (currentUser in this case) from our middleware into our templates.
+      res.locals.user = currentUser;
+    } catch (err) {
+      console.log(err);
+      return next();
+    }
+  }
+  next();
+};
 
 exports.restrictTo = function (...roles) {
   // we wrap the middlewear function so we can pass the arg ...roles into it from the outer function. we gain access to it from the inner function due to closure

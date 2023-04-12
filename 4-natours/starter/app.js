@@ -6,6 +6,8 @@ const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
+const cookieParser = require('cookie-parser');
+// const cors = require('cors');
 
 const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
@@ -47,6 +49,8 @@ app.use('/api', limiter);
 
 // allow req.body and set body size limit.
 app.use(express.json({ limit: '10kb' }));
+// parse cookie data
+app.use(cookieParser());
 
 // data sanitization against NoSQL query injection. removes mongo DB operators.
 app.use(mongoSanitize());
@@ -65,6 +69,20 @@ app.use(
     'price',
   ])
 );
+
+// test middleware
+app.use((req, res, next) => {
+  console.log(req.cookies);
+  next();
+});
+
+// cors - pavel's solution to axios cors issue...
+// app.use(
+//   cors({
+//     credentials: true,
+//     origin: 'http://localhost:3000',
+//   })
+// );
 
 // MOUNT ROUTERS
 app.use('/', viewRouter);
