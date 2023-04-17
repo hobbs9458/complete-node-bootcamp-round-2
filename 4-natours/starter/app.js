@@ -16,6 +16,7 @@ const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
 const reviewRouter = require('./routes/reviewRoutes');
 const viewRouter = require('./routes/viewRoutes');
+const bookingRouter = require('./routes/bookingRoutes');
 
 const app = express();
 
@@ -52,6 +53,9 @@ app.use(express.json({ limit: '10kb' }));
 // parse cookie data
 app.use(cookieParser());
 
+// if you need to access req.body coming straight from a form POST request
+// app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
 // data sanitization against NoSQL query injection. removes mongo DB operators.
 app.use(mongoSanitize());
 
@@ -72,7 +76,7 @@ app.use(
 
 // test middleware
 app.use((req, res, next) => {
-  console.log(req.cookies);
+  // console.log(req.cookies);
   next();
 });
 
@@ -89,6 +93,7 @@ app.use('/', viewRouter);
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/reviews', reviewRouter);
+app.use('/api/v1/bookings', bookingRouter);
 
 // catch uncaught routes
 app.all('*', (req, res, next) => {

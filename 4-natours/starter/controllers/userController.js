@@ -3,6 +3,52 @@ const User = require('../models/userModel');
 const AppError = require('../utils/appError');
 const catchAsyncError = require('../utils/catchAsyncError');
 const handlerFactory = require('../controllers/handlerFactory');
+const multer = require('multer');
+// sharp is an image processing library
+const sharp = require('sharp');
+
+// we were saving our uploaded images in the public dir
+// const multerStorage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, 'public/img/users');
+//   },
+//   filename: (req, file, cb) => {
+//     const fileExtension = file.mimetype.split('/')[1];
+//     cb(null, `user-${req.user.id}-${Date.now()}.${fileExtension}`);
+//   },
+// });
+
+// saving uploaded image as a buffer in memory: "buffer" refers to a temporary storage area in the computer's memory where data can be held before it is processed
+const multerStorage = multer.memoryStorage();
+
+const multerFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image')) {
+    cb(null, true);
+  } else {
+    cb(new AppError('Not an image. Please upload only images.', 400), false);
+  }
+};
+
+const upload = multer({
+  storage: multerStorage,
+  fileFilter: multerFilter,
+});
+
+exports.uploadUserPhoto = upload.single('photo');
+
+exports.resizeUserPhoto = catchAsyncError(async (req, res, next) => {
+  if (!req.file) return next();
+
+  req.file.filename = `user-${req.user.id}-${Date.now()}.jpeg`;
+
+  await sharp(req.file.buffer)
+    .resize(500, 500)
+    .toFormat('jpeg')
+    .jpeg({ quality: 90 })
+    .toFile(`public/img/users/${req.file.filename}`);
+
+  next();
+});
 
 const filterObj = (obj, ...allowedFields) => {
   const filteredObj = {};
@@ -35,7 +81,10 @@ exports.updateMe = catchAsyncError(async (req, res, next) => {
 
   // filter unwanted fields
   const filteredBody = filterObj(req.body, 'name', 'email');
-  console.log(filteredBody);
+
+  if (req.file) {
+    filteredBody.photo = req.file.filename;
+  }
 
   // update user with filtered body
   const updatedUser = await User.findByIdAndUpdate(req.user._id, filteredBody, {

@@ -4,7 +4,7 @@ const User = require('../models/userModel');
 const catchAsyncError = require('../utils/catchAsyncError');
 const AppError = require('../utils/appError');
 const { promisify } = require('util');
-const sendEmail = require('../utils/email');
+const Email = require('../utils/email');
 
 const signToken = function (id) {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -55,6 +55,10 @@ exports.signup = catchAsyncError(async (req, res, next) => {
     passwordChangedAt,
     role,
   });
+
+  const url = `${req.protocol}://${req.get('host')}/me`;
+  console.log(url);
+  await new Email(newUser, url).sendWelcome();
 
   createSendToken(newUser, 201, res);
 });
@@ -139,6 +143,8 @@ exports.protect = catchAsyncError(async (req, res, next) => {
 
   // add user to request body so we can use it in subsequent middleware
   req.user = currentUser;
+  // give pug templates access to currentUser
+  res.locals.user = currentUser;
 
   // grant access to protected route
   next();
@@ -203,26 +209,13 @@ exports.forgotPassword = catchAsyncError(async (req, res, next) => {
   // validateBeforeSave: false --> disables the validation of our schema so the user can just send a password
   await user.save({ validateBeforeSave: false });
 
-  // send to user's email
-  const resetURL = `${req.protocol}://${req.get(
-    'host'
-  )}/api/v1/users/resetPassword/${resetToken}`;
-
-  console.log(resetURL);
-
-  const message = `
-  Forgot your password? Submit a request with your new password to the following url:
-  
-  ${resetURL}
-  
-  If you didn't forget or lose your password, disregard this email. It will self destruct in 10 minutes!`;
-
   try {
-    await sendEmail({
-      email: user.email,
-      subject: 'Your password reset token (valid for 10 minutes)',
-      message,
-    });
+    // send to user's email
+    const resetURL = `${req.protocol}://${req.get(
+      'host'
+    )}/api/v1/users/resetPassword/${resetToken}`;
+
+    await new Email(user, resetURL).sendPasswordReset();
 
     res.status(200).json({
       status: 'success',
@@ -275,12 +268,14 @@ exports.resetPassword = catchAsyncError(async (req, res, next) => {
 });
 
 exports.updatePassword = catchAsyncError(async (req, res, next) => {
+  console.log('trying to update...');
   // get user from collection
   const user = await User.findById(req.user._id).select('+password');
 
   // check if POSTed current password is correct
   const currentPwInDB = user.password;
-  const candidatePw = req.body.currentPassword;
+  const candidatePw = req.body.passwordCurrent;
+  console.log('body', req.body);
 
   const passwordIsCorrect = await user.correctPassword(
     candidatePw,
